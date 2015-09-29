@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ *  Assigns queues to domains. Only users which are assigned to the domain can
+ *  add / remove nodes from those queues.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function nodequeue_domain_form_nodequeue_edit_queue_form_alter(&$form, &$form_state, $form_id) {
+  $domains = domain_domains();
+  $options = array();
+  foreach ($domains as $domain) {
+    $options[$domain['domain_id']] = $domain['sitename'];
+  }
+  $default_value = array();
+  if (is_object($form_state['build_info']['args'][0]) && !empty($form_state['build_info']['args'][0]->domains)) {
+    $default_value = $form_state['build_info']['args'][0]->domains;
+  }
+  $form['domains'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Domains'),
+    '#default_value' => $default_value,
+    '#options' => $options,
+    '#description' => t('Select the domains which users have to have access to in order to add/remove nodes to this queue.'),
+    '#weight' => 0.01,
+  );
+  $form['#submit'][] = 'nodequeue_domain_nodequeue_form_submit';
+}
+
+/**
+ * Additional submit handler for the add/edit nodequeue form.
+ */
+function nodequeue_domain_nodequeue_form_submit(&$form, &$form_state) {
+  db_delete('nodequeue_domains')->condition('qid', $form_state['values']['qid'])->execute();
+  $domains = array_filter($form_state['values']['domains']);
+  if (!empty($domains)) {
+    $query = db_insert('nodequeue_domains')->fields(array('qid', 'domain_id'));
+    foreach ($domains as $domain_id) {
+      $query->values(array($form_state['values']['qid'], $domain_id));
+    }
+    $query->execute();
+  }
+}
+
+/**
+ * Implements hook_nodequeue_alter().
+ */
+function nodequeue_domain_nodequeue_alter(&$queues, $context) {
+  switch ($context) {
+    case 'load_queues': {
+      $qids = array_keys($queues);
+      $query = db_select('nodequeue_domains', 'nd')->fields('nd', array('qid', 'domain_id'))->condition('nd.qid', $qids);
+      $result = $query->execute()->fetchAll();
+      foreach ($result as $row) {
+        if (empty($queues[$row->qid]->domains)) {
+          $queues[$row->qid]->domains = array();
+        }
+        $queues[$row->qid]->domains[] = $row->domain_id;
+      }
+      // If the user cannot manipulate all the queues, then we will filter out
+      // the queues which do not belong to any of the domains of the user. But,
+      // we do this only for user who do not have the right to manipulate ALL
+      // the queues, but they do have the right to manipulate some queues.
+
+      // The nodequeue module is aweful sometimes, and it doesn't really provide
+      // a consistent way to handle the acccess to different operations, like
+      // adding nodes to a queue. Actually, the main problem is the lack of
+      // hooks, so it is very hard to alter te functionality. This is why we do
+      // a sort of a hack here to remove the queues to which the user does not
+      // have access when they are loaded (which may have some side effects,
+      // they have to be discovered during testing).
+      if (!user_access('manipulate all queues') && user_access('manipulate queues')) {
+        global $user;
+        $account = user_load($user->uid);
+        foreach ($queues as $qid => $queue) {
+          if (!empty($queue->domains)) {
+            $intersection = array_intersect($queue->domains, $account->domain_user);
+            if (empty($intersection)) {
+              unset($queues[$qid]);
+            }
+          }
+        }
+      }
+      break;
+    }
+  }
+}

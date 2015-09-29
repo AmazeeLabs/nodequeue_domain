@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * @file
+ *  Install file for the Nodequeue Domain module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function nodequeue_domain_schema() {
+
+  $schema['nodequeue_domains'] = array(
+    'description' => 'Defines the domains to which this nodequeue is assigned.',
+    'fields' => array(
+      'qid' => array(
+        'description' => 'Primary key for {nodequeue_queue}',
+        'type' => 'int',
+        'size' => 'big',
+        'unsigned' => TRUE,
+        'not null' => TRUE
+      ),
+      'domain_id' => array(
+        'description' => 'The domain id',
+        'type' => 'int',
+        'size' => 'big',
+        'unsigned' => TRUE,
+        'not null' => TRUE
+      ),
+    ),
+    'indexes' => array(
+      'qid' => array('qid'),
+      'domain_id' => array('domain_id'),
+    ),
+  );
+
+  return $schema;
+}

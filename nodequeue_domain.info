@@ -1,0 +1,5 @@
+name = Nodequeue Domain
+description = Assigns queues to domains. Only users which are assigned to the domain can add / remove nodes from those queues.
+core = 7.x
+dependencies[] = nodequeue
+dependencies[] = domain
